@@ -41,8 +41,16 @@ def get_abs_title(text):
   abstract = abstract.strip()
 
   # remove the beginning and ending quotes
-  title = title[1:-1]
-  abstract = abstract[1:-1]
+  if len(title) > 0:
+    if title[0] == "'":
+      title = title[1:]
+    if title[-1] == "'":
+      title = title[:-1]
+  if len(abstract) > 0:
+    if abstract[0] == "'":
+      abstract = abstract[1:]
+    if abstract[-1] == "'":
+      abstract = abstract[:-1]
   return title, abstract, (start, end)
 
 def reformatter(example):
