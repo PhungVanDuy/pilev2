@@ -145,7 +145,7 @@ class IterDataset:
             dataset = dataset.select(slice_idx_dataset)
             dataset_collator.append(dataset)
         if len(dataset_collator) == 1:
-            concatenate_datasets = dataset_collator[0]
+            concatenated_dataset = dataset_collator[0]
         else:
             concatenated_dataset = datasets.concatenate_datasets(dataset_collator)
         self.logger.info(f"Successfully concatenated the sliced dataset in the batch...")
