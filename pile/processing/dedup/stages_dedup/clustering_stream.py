@@ -66,14 +66,30 @@ class UnionFind:
         self.parent[px] = self.parent[py] = min(px, py)
 
 class IterDataset:
-    def __init__(self,shard_dataset_paths:list[str]):
+    def __init__(self,shard_dataset_paths:list[str],len_dict_offset:dict=None):
         """
         Iterating over a list of dataset paths
         """
         self.logger = logging.getLogger("IterDataset")
         self.shard_dataset_path_list : list[str] = shard_dataset_paths
-        self.len : int = self.len_calc()
+        self.len_dict_offset = len_dict_offset
+        self.len = sum(len_dict_offset.values())
+        self.logger.info(f"Length of dataset is {self.len}")
+        self.len_range_offset_dict = self.make_offset_dict()
+        self.dataset_in_mem = None
+        self.dataset_in_mem_name = None
     
+    def make_offset_dict(self):
+        offset_dict = {}
+        running_len = 0
+        for path in self.len_dict_offset:
+            calc_pos = running_len + self.len_dict_offset[path]
+            start = running_len
+            end = calc_pos
+            offset_dict[path] = (start,end)
+            running_len += self.len_dict_offset[path]
+        return offset_dict
+
     def __len__(self) -> int:
         return self.len
     
@@ -83,12 +99,63 @@ class IterDataset:
         self.logger.info(f"Length of dataset is {total_len}")
         return total_len
 
-    def __iter__(self):
-        for path in self.shard_dataset_path_list:
-            dataset = datasets.load_from_disk(path)
-            for datapoint in dataset:
-                yield datapoint
 
+    def find_datasets_in_range(self,start_idx,end_idx):
+        datasets_in_range = []
+        range_list_dataset = []
+        to_find_range_set = set(range(start_idx,end_idx))
+        for path in self.shard_dataset_path_list:
+            start,end = self.len_range_offset_dict[path]
+            range_list = list(range(start,end))
+            if len(list(to_find_range_set.intersection(range_list))) > 0:
+                datasets_in_range.append(path)
+                range_list_dataset.append(range_list)
+        return datasets_in_range,range_list_dataset
+
+    def get_slicing_ind(self,start_idx,end_idx):
+        datasets_in_range,range_list_dataset = self.find_datasets_in_range(start_idx,end_idx)
+        selected_dataset = []
+        range_dataset_dict = {}
+        for ind in range(start_idx,end_idx):
+            for idx, range_list in enumerate(range_list_dataset):
+                if ind in range_list:
+                    range_dataset_dict[ind] = (idx,range_list.index(ind))
+                    if idx not in selected_dataset:
+                        selected_dataset.append(idx)
+        return range_dataset_dict,selected_dataset
+        #return start_idx_list,end_idx_list
+
+
+    def get_range(self, start_idx:int, end_idx:int):
+        #subset the dataset and stream
+        output = []
+        dataset_collator = []
+        datasets_in_range,range_list_dataset = self.find_datasets_in_range(start_idx,end_idx)
+        slice_dict,dataset_to_load = self.get_slicing_ind(start_idx,end_idx)
+        for dataset_idx in dataset_to_load:
+            if self.dataset_in_mem_name == datasets_in_range[dataset_idx]:
+                self.logger.info(f"Dataset {datasets_in_range[dataset_idx]} is already in memory...")
+                dataset = self.dataset_in_mem
+            else:
+                dataset = datasets.load_from_disk(datasets_in_range[dataset_idx])
+                self.dataset_in_mem = dataset
+                self.dataset_in_mem_name = datasets_in_range[dataset_idx]
+            slice_idx_dataset = [idx[1] for idx in slice_dict.values() if idx[0] == dataset_idx]
+            #preserve
+            dataset = dataset.select(slice_idx_dataset)
+            dataset_collator.append(dataset)
+        if len(dataset_collator) == 1:
+            concatenate_datasets = dataset_collator[0]
+        else:
+            concatenated_dataset = datasets.concatenate_datasets(dataset_collator)
+        self.logger.info(f"Successfully concatenated the sliced dataset in the batch...")
+        return concatenated_dataset
+    
+    def get_ind_dataset(self, idt:str):
+        return datasets.load_from_disk(idt)
+
+    def __getitem__(self, idx:int):
+        return self.concatenated_dataset[idx]
 
 
 
@@ -138,7 +205,7 @@ if __name__ == "__main__":
             minhash_dataset_paths.append(dataset)
             len_dataset_paths.append(minhash_dataset_dict[dataset]) #Append the length here.
             assert os.path.isdir(dataset.strip())
-            assert dataset.strip().endswith("_minhash")
+            #assert dataset.strip().endswith("_minhash")
             assert os.path.isfile(os.path.join(dataset.strip(), "dataset_info.json"))
         
         assert len(minhash_dataset_paths) == len(len_dataset_paths) #Should be equal
@@ -161,29 +228,30 @@ if __name__ == "__main__":
         # concatenate all the minhashes to one dataset
         #CHANGE(reshinth) : Replace the dataset with generator
         #embedded = concatenate_datasets(list(minhash_datasets.values()))
-        embedded = IterDataset(minhash_dataset_paths) #Paths to dataset is passed here.
+        embedded = IterDataset(minhash_dataset_paths,minhash_dataset_dict) #Paths to dataset is passed here.
         time_measures["load_minhash"] = time.time() - time_measures["load_minhash"]
 
         print('output will be saved to the following files:')
         outputs = dict()
         for minhash_dataset_path in minhash_dataset_paths:
             print(minhash_dataset_path)
-            print(minhash_dataset_path[:-len("_minhash")])
-            outputs[minhash_dataset_path] = minhash_dataset_path[:-len("_minhash")] + "_filter_idx"
+            outputs[minhash_dataset_path] = minhash_dataset_path+ "_filter_idx"
             print(outputs[minhash_dataset_path])
 
         time_measures["clustering"] = time.time()
 
         # get the first element of the dataset
-        first = embedded[0]
+        first = embedded.get_range(0, 1)[0] #Just get the first element.
         B = len(first['__signatures__'])
+        print(B)
+        
         batch_size: int = 10000
         for table_idx in range(B):
             new_hash_table = defaultdict(set)
             for i in tqdm(
-                range(0, len(embedded), batch_size), dynamic_ncols=True, desc="Iterating MinHashes..."  # noqa: E501
+                range(0, embedded.len, batch_size), dynamic_ncols=True, desc="Iterating MinHashes..."  # noqa: E501
             ):
-                batch = embedded[i : i + batch_size]
+                batch = embedded.get_range(i, i + batch_size)
                 for tmp_idx, Hs in enumerate(batch["__signatures__"]):
                     #TODO check if it is correct
                     new_hash_table[Hs[table_idx]].add(i + tmp_idx)
@@ -196,33 +264,32 @@ if __name__ == "__main__":
                     uf.union(x, idx)
 
         time_measures["clustering"] = time.time() - time_measures["clustering"]
-
+        print(time_measures)
+        import sys 
+        print(f" Size of union finder, {sys.getsizeof(uf)}")
         time_measures["filtering_idx"] = time.time()
         gc.freeze()
         gc.disable()
-        final_data = embedded.map(
-            function=lambda _, idx: {"__filter__": uf.find(idx) !=  idx},
-            with_indices=True,
-            num_proc=os.cpu_count(),
-            new_fingerprint=str(random.getrandbits(128)),
-            desc="Finding clusters...",
-        )
-        gc.enable()
-        gc.collect()
-        time_measures["filtering_idx"] = time.time() - time_measures["filtering_idx"]
-
-        final_data = final_data.remove_columns(["__signatures__"])
-        NUM_TRUE_LABEL = sum(final_data['__filter__'])
-        print('Total Number of idx to be filtered', NUM_TRUE_LABEL)
-
-        print('saving filter idx data...')
+        # Iterate through each dataset and filter them.
         time_measures["save"] = time.time()
         for minhash_dataset_path in minhash_dataset_paths:
-            offset = offset_store[minhash_dataset_path]
-            size = len(minhash_datasets[minhash_dataset_path])
+            print('filtering dataset: ', minhash_dataset_path)
+            final_data = embedded.get_ind_dataset(minhash_dataset_path)
+            print('Length of the dataset before filtering', len(final_data))
+            final_data = final_data.map(
+                function=lambda _, idx: {"__filter__": uf.find(idx) !=  idx},
+                with_indices=True,
+                num_proc=os.cpu_count(),
+                new_fingerprint=str(random.getrandbits(128)),
+                desc="Finding clusters...",
+            )
+            final_data = final_data.remove_columns(["__signatures__"])
+            NUM_TRUE_LABEL = sum(final_data['__filter__'])
+            print('Total Number of idx to be filtered', NUM_TRUE_LABEL)
             output = outputs[minhash_dataset_path]
-            filter_idx = final_data.select(range(offset, offset + size))
-            filter_idx.save_to_disk(output)
+            print(f"Saving to {minhash_dataset_path} to {output}... of length {len(final_data)}")
+            #filter_idx = final_data.select(range(offset, offset + size)) Why chop ?
+            final_data.save_to_disk(output)
             print(f"saved to {output}")
         time_measures["save"] = time.time() - time_measures["save"]
 
