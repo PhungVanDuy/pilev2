@@ -11,9 +11,14 @@
 /fsx/shared/pilev2_hashes/group_2/CodePileReddit2021_ver2
 /fsx/shared/pilev2_hashes/group_2/CodePileReddit2022_ver2
 /fsx/shared/pilev2_hashes/group_2/PileV2Reddit2019_ver2
-/fsx/shared/pilev2_hashes/group_2/PileV2Reddit2020_ver2
+/fsx/shared/pilev2_hashes/group_2/PileV2Reddit2020_ver2/PileV2Reddit2020_0
+/fsx/shared/pilev2_hashes/group_2/PileV2Reddit2020_ver2/PileV2Reddit2020_1
 /fsx/shared/pilev2_hashes/group_2/PileV2Reddit2021_part_3
-/fsx/shared/pilev2_hashes/group_2/PileV2Reddit2022_ver2
+/fsx/shared/pilev2_hashes/group_2/PileV2Reddit2022_ver2/PileV2Reddit2022_0
+/fsx/shared/pilev2_hashes/group_2/PileV2Reddit2022_ver2/PileV2Reddit2022_1
+/fsx/shared/pilev2_hashes/group_2/PileV2Reddit2022_ver2/PileV2Reddit2022_2
+/fsx/shared/pilev2_hashes/group_2/PileV2Reddit2022_ver2/PileV2Reddit2022_3
+/fsx/shared/pilev2_hashes/group_2/PileV2Reddit2022_ver2/PileV2Reddit2022_4
 /fsx/shared/pilev2_hashes/group_2/PileV2Posts_ver2
 /fsx/shared/pilev2_hashes/group_2/PileV2Reddit2019_0
 /fsx/shared/pilev2_hashes/group_2/PileV2Reddit2019_1
