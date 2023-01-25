@@ -276,6 +276,8 @@ if __name__ == "__main__":
             with_indices=True,
             desc="Fingerprinting...",
         )
+
+        print("Saving dataset...")
         time_measures["minhash"] = time.time() - time_measures["minhash"]
         time_measures["save_dataset"] = time.time() 
         if output_format == "hf_arrow":

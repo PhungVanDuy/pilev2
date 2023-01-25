@@ -166,7 +166,7 @@ if __name__ == "__main__":
             size = len(minhash_datasets[minhash_dataset_path])
             output = outputs[minhash_dataset_path]
             filter_idx = final_data.select(range(offset, offset + size))
-            filter_idx.save_to_disk(output)
+            filter_idx.save_to_disk(output, max_shard_size= "500MB")
             print(f"saved to {output}")
         time_measures["save"] = time.time() - time_measures["save"]
 
