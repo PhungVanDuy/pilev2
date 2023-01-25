@@ -17,7 +17,11 @@ for path in group2:
         # dst.parent.mkdir(parents=True, exist_ok=True)
         # shutil.move(src, dst)
     else:
-        src = root / path
-        dst = new_root / path
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(src, dst)
+        try:
+            src = root / path
+            dst = new_root / path
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            # print(src, dst)
+            shutil.move(src, dst)
+        except:
+            print("error", path)
