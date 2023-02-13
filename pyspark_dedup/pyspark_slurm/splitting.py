@@ -7,12 +7,23 @@ for my_bucket_object in my_bucket.objects.filter(Prefix="data/codepile/group1/")
 print(file_paths[0])
 from spark_session_builder import build_spark_session
 # file_paths = file_paths[100:200]
-spark = build_spark_session("spark://cpu128-dy-r6i-32xlarge-46:7077", 12, 256)
+spark = build_spark_session("spark://cpu128-dy-r6i-32xlarge-5:7077", 64, 256)
 spark.conf.set("spark.sql.parquet.enableVectorizedReader", "false")
 
 data = spark.read.parquet(*file_paths)
 # Convert column to string
 data = data.withColumn("meta", data.meta.cast("string"))
+import time
+start = time.time()
+#data.filter(data.meta.contains("Project Gutenberg")).show(5)
+df = data.filter(data.meta.contains("Project Gutenberg"))
+end = time.time()
+print("Time to query: ", end-start)
+start = time.time()
+df.write.parquet("Gutenberg.parquet")
+end = time.time()
+print("Time to write: ", end-start)
+exit()
 # arXiv
 print("arXiv")
 data.filter(data.meta.contains("arXiv_out")).show(5)
